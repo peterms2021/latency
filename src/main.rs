@@ -233,7 +233,10 @@ async fn echo_server(port: u16)-> std::io::Result<()> {
     loop {
         let mut buf = vec![0u8; 1000];
         let (amt, src) = socket.recv_from(&mut buf).await?;
+
+#[cfg(test)]
          println!("bytes: {:?} From: {:?}, buf: {:?}",amt, src, &buf[..amt]);
+
         socket.send_to(&buf[..amt], src).await?;
         SERVER_ECHOS.inc();
     }
@@ -248,27 +251,16 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
         //let n = rx.recv(&mut buf).await?;
         let (n, addr) = rx.recv_from(&mut buf).await?;
 
-        println!("{:?} recv from {:?}", n,addr);
-        assert_eq!(n, mem::size_of::<u128>());
+#[cfg(test)]
+        {
+            println!("{:?} recv from {:?}", n,addr);
+            assert_eq!(n, mem::size_of::<u128>());
+        }
 
         let send_time: u128;
         let mut arr = [0u8; 16];
         arr.copy_from_slice(&buf[..n]);
         send_time = u128::from_be_bytes(arr);
-
-#[cfg(test2)]
-    {
-        {
-            let rng = thread_rng();
-            let delay_time: u32 = rng.gen_range(10..1000);
-            let collect_interval = tokio::time::interval(Duration::from_micros(delay_time as u64));
-            let dtime = delay_time as f64;
-
-            TEST_LATENCY_COLLECTOR.observe( dtime );
-            collect_interval.tick().await;
-        }
-    }
-
 
         let recv_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -278,10 +270,11 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
         if recv_time >= send_time {
 
             let mut delta = recv_time - send_time;
-            println!("{:?} detlta(ns)", delta);
 
             //convert to usec
             delta = delta/1000;
+
+            #[cfg(test)]
             println!("{:?} detlta(us)", delta);
 
             let dtime: f64 = delta as f64;
@@ -304,8 +297,11 @@ async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<
 
         let bytes = time.to_be_bytes();
         let len = tx.send(&bytes).await?;
+
+        #[cfg(test)]{
             assert_eq!(len, mem::size_of::<u128>());
             println!("{:?} bytes sent", len);
+        }
     }
 }
 
