@@ -22,7 +22,10 @@ lint:
 	touch src/**
 	cargo clippy --all-targets --all-features -- -D warnings
 
-dev:
-	@cargo run
+server:
+	@cargo run -- -e -w 8090
+
+client:
+	@cargo run -- -i 100
 
 .PHONY: build test docs style-check lint

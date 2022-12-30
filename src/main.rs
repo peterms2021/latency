@@ -15,7 +15,6 @@ use std::{u128 };
 use std::net::{ ToSocketAddrs};
 use std::mem;
 
-
 lazy_static! { 
     pub static ref INCOMING_REQUESTS: IntCounter =
         IntCounter::new( "incoming_requests", "Incoming Requests").expect("metric can be created");
