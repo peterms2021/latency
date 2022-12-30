@@ -1,0 +1,63 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug server executable 'llop'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=llop",
+                    "--package=llop"
+                ],
+                "filter": {
+                    "name": "llop",
+                    "kind": "bin"
+                }
+            },
+            "args": [-e -p 9000 ],
+            "cwd": "${workspaceFolder}"
+        },
+{
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug client executable 'llop'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=llop",
+                    "--package=llop"
+                ],
+                "filter": {
+                    "name": "llop",
+                    "kind": "bin"
+                }
+            },
+            "args": [ -p 9000 ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'llop'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=llop",
+                    "--package=llop"
+                ],
+                "filter": {
+                    "name": "llop",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

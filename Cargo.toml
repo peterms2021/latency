@@ -1,0 +1,25 @@
+[package]
+name = "llop"
+version = "0.1.0"
+authors = ["Peter Walekr <peterwalker@microsoft.com>"]
+edition = "2021"
+
+[dependencies]
+#tokio = { version = "1.23.0", features = ["macros", "rt-threaded", "time"] }
+tokio = { version = "1.23.0", features = ["full"] }
+warp = "0.3.3"
+prometheus = { version ="0.13.3", features = ["process"] }
+lazy_static = "1.4"
+futures = { version = "0.3", default-features = false }
+rand = "0.8.5"
+clap-cargo = "0.10.0"
+clap = { version = "4.0.32", features = ["derive"] }
+
+[profile.dev]
+debug = 0
+
+[profile.test]
+debug = 0
+
+[profile.release]
+panic = 'abort'
