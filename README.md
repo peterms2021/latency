@@ -19,6 +19,9 @@ docker run -p 9090:9090 --network=host prometheus
 ```
 
 Note that it network configuration with promethues in docker may not work because of the NAT mode of the bridge. it may be easier to just run a local prometheus instance to see the test mode at work.
+```bash
+prometheus --config.file=prom/prometheus.yml
+```
 
 Run service with `make dev`.
 

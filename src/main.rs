@@ -9,14 +9,14 @@ use std::result::Result;
 use std::time::Duration;
 use warp::{ws::WebSocket, Filter, Rejection, Reply};
 use tokio::{net::UdpSocket};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
 use std::{u128 };
 use std::net::{ ToSocketAddrs};
 use std::mem;
 
 
-lazy_static! {
+lazy_static! { 
     pub static ref INCOMING_REQUESTS: IntCounter =
         IntCounter::new( "incoming_requests", "Incoming Requests").expect("metric can be created");
 
@@ -35,7 +35,7 @@ lazy_static! {
     ) .expect("metric can be created");
 
     pub static ref RESPONSE_TIME_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("latency", "Echo Response Times")
+        HistogramOpts::new("response_time", "Echo Response Times")
     ).expect("metric can be created");
 
     pub static ref LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
@@ -232,10 +232,10 @@ async fn echo_server(port: u16)-> std::io::Result<()> {
     println!("\nstart server on port {} \n", port);
 
     loop {
-        let mut buf = [0; 10];
-        let (_amt, src) = socket.recv_from(&mut buf).await?;
-         println!("bytes: {:?} From: {:?}, buf: {:?}",_amt, src, buf);
-        socket.send_to(&buf, src).await?;
+        let mut buf = vec![0u8; 1000];
+        let (amt, src) = socket.recv_from(&mut buf).await?;
+         println!("bytes: {:?} From: {:?}, buf: {:?}",amt, src, &buf[..amt]);
+        socket.send_to(&buf[..amt], src).await?;
         SERVER_ECHOS.inc();
     }
 }
@@ -243,7 +243,7 @@ async fn echo_server(port: u16)-> std::io::Result<()> {
 async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
     println!(" echo_client_recv");
 
-    let mut buf = vec![0u8, 100];
+    let mut buf = vec![0u8; 1000];
     loop {
 
         //let n = rx.recv(&mut buf).await?;
