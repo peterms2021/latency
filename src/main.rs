@@ -40,6 +40,11 @@ struct Cli {
 }
 
 
+const LATENCY_CUSTOM_BUCKETS: &[f64; 25] = &[
+    5.0, 25.0, 50.0, 75.0,  100.0, 125.0, 150.0, 175.0, 200.0, 250.0, 300.0, 350.0, 400.0,
+    500.0, 600.0, 700.0,800.0, 900.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0,
+];
+
 lazy_static! { 
     pub static ref SERVER_ECHOS: IntCounter =
         IntCounter::new( "latency_server_echos", "Incoming Echo Requests").expect("metric can be created");
@@ -51,7 +56,8 @@ lazy_static! {
         IntCounter::new( "latency_echo_client_rx", "Received Echo Requests").expect("metric can be created");
 
     pub static ref LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("latency", "Echo Response Times")).expect("metric can be created"); 
+        HistogramOpts::new("latency", "Echo Response Times in microseconds").buckets(LATENCY_CUSTOM_BUCKETS.to_vec()))
+        .expect("metric can be created"); 
 
     pub static ref CONNECTED_CLIENTS: IntGauge =
         IntGauge::new( "connected_clients", "Connected Clients").expect("metric can be created");
@@ -292,7 +298,7 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
             //convert to usec
             dtime = dtime/1000.0;
 
-            //#[cfg(test)]
+            #[cfg(test)]
             println!("{:?} detlta(us)", dtime);
 
             LATENCY_COLLECTOR.observe(dtime);

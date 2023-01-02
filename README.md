@@ -30,7 +30,17 @@ prometheus --config.file=prom/prometheus.yml
 Run service with `make dev`.
 
 Go to http://localhost:9090/graph 
-Look for metrics on the values of `latency` (histogram), `echo_requests` (counter), `echo_sent` (counter)
+Look for metrics on the values of `latency` (histogram), `latency_echo_client_tx` (counter), `ilatency_echo_client_rx` (counter)
 
+To see the latency histogram
+```bash
+histogram_quantile(0.50, sum(rate(latency_bucket[2m])) by (le))
+histogram_quantile(0.90, sum(rate(latency_bucket[2m])) by (le))
+histogram_quantile(0.99, sum(rate(latency_bucket[2m])) by (le))
+
+sum(rate(latency_echo_client_rx[2m]))
+sum(rate(latency_echo_client_tx[2m]))
+
+```
 
 For test build you can also call the `/some` endpoint and observer the `incoming_requests` counter, as well as connect via websockets at `/ws/some_id` and observe the `connected_clients` counter.
