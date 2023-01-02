@@ -15,43 +15,6 @@ use std::{u128 };
 use std::net::{ ToSocketAddrs};
 use std::mem;
 
-lazy_static! { 
-    pub static ref INCOMING_REQUESTS: IntCounter =
-        IntCounter::new( "incoming_requests", "Incoming Requests").expect("metric can be created");
-
-    pub static ref SERVER_ECHOS: IntCounter =
-        IntCounter::new( "echo_requests", "Incoming Echo Requests").expect("metric can be created");
-
-    pub static ref CLIENT_ECHOS: IntCounter =
-        IntCounter::new( "echo_sent", "Transmitted Echo Requests").expect("metric can be created");
-
-    pub static ref CONNECTED_CLIENTS: IntGauge =
-        IntGauge::new( "connected_clients", "Connected Clients").expect("metric can be created");
-
-    pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
-        Opts::new("response_code", "Response Codes"),
-        &["statuscode", "type"]
-    ) .expect("metric can be created");
-
-    pub static ref RESPONSE_TIME_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("response_time", "Echo Response Times")
-    ).expect("metric can be created");
-
-    pub static ref LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("latency", "Echo Response Times")
-    ).expect("metric can be created"); 
-
-    pub static ref REGISTRY: Registry = Registry::new();
-}
-
-
-#[cfg(test)]
-lazy_static! {
-    pub static ref TEST_LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("test_latency", "Server Delay Response Times")
-    ).expect("metric can be created"); 
-}
-
 use clap::Parser;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -77,38 +40,87 @@ struct Cli {
 }
 
 
-fn register_custom_metrics() {
-    REGISTRY
-        .register(Box::new(INCOMING_REQUESTS.clone()))
-        .expect("collector can be registered");
+lazy_static! { 
+    pub static ref SERVER_ECHOS: IntCounter =
+        IntCounter::new( "latency_server_echos", "Incoming Echo Requests").expect("metric can be created");
 
-    REGISTRY
-        .register(Box::new(CONNECTED_CLIENTS.clone()))
-        .expect("collector can be registered");
+    pub static ref TX_CLIENT_ECHOS: IntCounter =
+        IntCounter::new( "latency_echo_client_tx", "Transmitted Echo Requests").expect("metric can be created");
+
+    pub static ref RX_CLIENT_ECHOS: IntCounter =
+        IntCounter::new( "latency_echo_client_rx", "Received Echo Requests").expect("metric can be created");
+
+    pub static ref LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
+        HistogramOpts::new("latency", "Echo Response Times")).expect("metric can be created"); 
+
+    pub static ref CONNECTED_CLIENTS: IntGauge =
+        IntGauge::new( "connected_clients", "Connected Clients").expect("metric can be created");
+
+    pub static ref REGISTRY: Registry = Registry::new();
+}
+
+
+#[cfg(test)]
+lazy_static! {
+    pub static ref INCOMING_REQUESTS: IntCounter =
+        IntCounter::new( "incoming_requests", "Incoming Requests").expect("metric can be created");
+
+
+    pub static ref RESPONSE_CODE_COLLECTOR: IntCounterVec = IntCounterVec::new(
+        Opts::new("response_code", "Response Codes"),
+        &["statuscode", "type"]
+    ) .expect("metric can be created");
+
+    pub static ref RESPONSE_TIME_COLLECTOR: Histogram = Histogram::with_opts(
+        HistogramOpts::new("response_time", "Echo Response Times")
+    ).expect("metric can be created");
+
+    pub static ref TEST_LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
+        HistogramOpts::new("test_latency", "Server Delay Response Times")
+    ).expect("metric can be created"); 
+}
+
+
+fn register_custom_metrics() {
 
     REGISTRY
             .register(Box::new(SERVER_ECHOS.clone()))
             .expect("collector can be registered");
 
     REGISTRY
-            .register(Box::new(CLIENT_ECHOS.clone()))
+            .register(Box::new(RX_CLIENT_ECHOS.clone()))
             .expect("collector can be registered");
 
     REGISTRY
-        .register(Box::new(RESPONSE_CODE_COLLECTOR.clone()))
+            .register(Box::new(TX_CLIENT_ECHOS.clone()))
+            .expect("collector can be registered");
+
+    REGISTRY
+        .register(Box::new(LATENCY_COLLECTOR.clone()))
         .expect("collector can be registered");
 
     REGISTRY
-        .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
-        .expect("collector can be registered");
+            .register(Box::new(CONNECTED_CLIENTS.clone()))
+            .expect("collector can be registered");
 
 #[cfg(test)]
-    REGISTRY
-        .register(Box::new(TEST_LATENCY_COLLECTOR.clone()))
-        .expect("collector can be registered");
+    {
 
+        REGISTRY
+            .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
+            .expect("collector can be registered");
+
+        REGISTRY
+            .register(Box::new(INCOMING_REQUESTS.clone()))
+            .expect("collector can be registered");
+
+        REGISTRY
+            .register(Box::new(RESPONSE_CODE_COLLECTOR.clone()))
+            .expect("collector can be registered");
+    }
 }
 
+#[cfg(test)]
 fn track_request_time(response_time: f64) {
     RESPONSE_TIME_COLLECTOR .observe(response_time);
 }
@@ -120,6 +132,7 @@ async fn some_handler() -> Result<impl Reply, Rejection> {
     Ok("hello!")
 }
 
+#[cfg(test)]
 async fn simulated_data_collector() {
     let mut collect_interval = tokio::time::interval(Duration::from_millis(10));
     loop {
@@ -142,6 +155,7 @@ async fn induce_delay() {
     TEST_LATENCY_COLLECTOR.observe(delay_time as f64);
 }
 
+#[cfg(test)]
 fn track_status_code(status_code: usize) {
     match status_code {
         500..=599 => RESPONSE_CODE_COLLECTOR
@@ -192,6 +206,7 @@ async fn client_connection(ws: WebSocket, id: String) {
 
 
 async fn metrics_handler() -> Result<impl Reply, Rejection> {
+
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 
@@ -267,17 +282,19 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
         .unwrap()
         .as_nanos();
 
+        RX_CLIENT_ECHOS.inc();
+
         if recv_time >= send_time {
 
             let mut delta = recv_time - send_time;
+            let mut dtime: f64 = delta as f64;
 
             //convert to usec
-            delta = delta/1000;
+            dtime = dtime/1000.0;
 
-            #[cfg(test)]
-            println!("{:?} detlta(us)", delta);
+            //#[cfg(test)]
+            println!("{:?} detlta(us)", dtime);
 
-            let dtime: f64 = delta as f64;
             LATENCY_COLLECTOR.observe(dtime);
         }
     }
@@ -297,6 +314,8 @@ async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<
 
         let bytes = time.to_be_bytes();
         let len = tx.send(&bytes).await?;
+        TX_CLIENT_ECHOS.inc();
+
 
         #[cfg(test)]{
             assert_eq!(len, mem::size_of::<u128>());
@@ -368,23 +387,27 @@ async fn main() {
     
     println!("Started webservice on port {}", args.whttp_port);
 
-#[cfg(test)]
- {
-    let some_route = warp::path!("some").and_then(some_handler);
-    //kick off the data collector tasks    
-    tokio::task::spawn(simulated_data_collector());
+    //only start the metrics service for client mode
+   if args.emode == false 
+    {
+        #[cfg(test)]
+        {
+            let some_route = warp::path!("some").and_then(some_handler);
+            //kick off the data collector tasks    
+            tokio::task::spawn(simulated_data_collector());
 
-    warp::serve(metrics_route.or(some_route).or(ws_route))
-        .run(([0, 0, 0, 0], args.whttp_port))
-        .await;
-}
+            warp::serve(metrics_route.or(some_route).or(ws_route))
+                .run(([0, 0, 0, 0], args.whttp_port))
+                .await;
+        }
 
-#[cfg(not(test))]   {
-    warp::serve(metrics_route.or(ws_route))
-        .run(([0, 0, 0, 0], args.whttp_port))
-        .await;
+        #[cfg(not(test))]   {
+            warp::serve(metrics_route.or(ws_route))
+                .run(([0, 0, 0, 0], args.whttp_port))
+                .await;
 
-}
+        }
+    }
 }
 
 

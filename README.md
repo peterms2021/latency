@@ -3,6 +3,7 @@
 A client & server latency measuring app  using Prometheus Metrics in a Rust Web Service. The echo server can be depployed stand-alone at node in a cluster and the echo clients can be run as side-cars in application pods. The system measures the responsiveness of the ecosystem similar to ping but without the the use of ICMP. More importantly, we can run the client as service that monitors the liveliness of cluster with latency as primary measure. The goal is to be able to measure latency with high precision and high fidelity - nano or microseconds.
 
 Build the llop (see the Makefile)
+
 Run server with `make server`.
 
 Run server with `make client`.
