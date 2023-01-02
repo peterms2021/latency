@@ -10,7 +10,6 @@ use std::mem;
 use std::{thread, time};
 
 use crate::eargs;
-use crate::emetrics;
 
 fn induce_delay() {
     let mut rng = thread_rng();
@@ -35,7 +34,7 @@ pub fn echo_server(port: u16)-> std::io::Result<()> {
 
         socket.send_to(&buf[..amt], src)?;
         
-        emetrics::track_server_echos();
+        main::track_server_echos();
     }
 }
 

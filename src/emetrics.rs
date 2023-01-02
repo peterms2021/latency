@@ -142,7 +142,7 @@ async fn metrics_handler() -> Result<impl Reply, Rejection> {
 
 use crate::eargs;
 
-pub async fn run(args: &Arc<eargs::Cli>)
+pub async fn run_metrics(args: &Arc<eargs::Cli>)
 {
   
     //set up the web interface for prometheus data export and a generic 
