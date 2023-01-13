@@ -6,10 +6,11 @@
         "storage": "32gb" 
      },
     "extensions": [
-		"coenraads.bracket-pair-colorizer-2",
-		"github.vscode-pull-request-github",
+		"github.codespaces",
+        "rust-lang.rust-analyzer",
+        "coenraads.bracket-pair-colorizer-2",
         "ms-azuretools.vscode-docker",
-        "rust-lang.rust-analyzer"
+		"github.vscode-pull-request-github"
 	],
     "dockerFile": "Dockerfile",
     "settings": {
