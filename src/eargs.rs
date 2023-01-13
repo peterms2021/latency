@@ -24,7 +24,8 @@ pub struct Cli {
     #[arg(short, long, help= "The http port on which metrics are exported", default_value_t = 8080)]
     pub whttp_port: u16, 
 }
- pub fn init() -> Arc<Cli> {
+
+pub fn init() -> Arc<Cli> {
     let args = Arc::new(Cli::parse());
     args
- }
+}

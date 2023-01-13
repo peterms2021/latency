@@ -1,6 +1,4 @@
-#[macro_use]
-extern crate lazy_static;
-
+use std::sync::Arc;
 
 mod etasks;
 mod ethreaded;
@@ -12,17 +10,14 @@ async fn main() {
 
     let args = &eargs::init();
 
-    emetrics::register_custom_metrics();
+    let metrics = Arc::new(emetrics::new());
+    metrics.register();
 
     if args.async_mode {
-        etasks::run_latency_test(args);   
-    }else{
-        ethreaded::run_latency_test(args);   
+        etasks::run_latency_test(args, metrics.clone()).await;   
+    } else {
+        ethreaded::run_latency_test(args, metrics.clone());   
     }
 
-    emetrics::run_metrics(args);
+    emetrics::run_metrics(args, metrics).await;
 }
-
-
-
-////////

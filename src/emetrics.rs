@@ -1,93 +1,89 @@
-#[macro_use]
-extern crate lazy_static;
+use crate::eargs;
+
 use futures::StreamExt;
 use prometheus::{
-    HistogramOpts, Histogram, IntCounterVec, IntCounter, IntGauge, Opts, Registry,
+    Histogram, HistogramOpts, IntCounter, IntGauge, Registry,
+    proto::MetricFamily,
 };
 use std::result::Result;
 use warp::{ws::WebSocket, Filter, Rejection, Reply};
 use std::sync::Arc;
 
-
-const LATENCY_CUSTOM_BUCKETS: &[f64; 25] = &[
-    5.0, 25.0, 50.0, 75.0,  100.0, 125.0, 150.0, 175.0, 200.0, 250.0, 300.0, 350.0, 400.0,
-    500.0, 600.0, 700.0,800.0, 900.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0,
-];
-
-
-lazy_static! { 
-    pub static ref SERVER_ECHOS: IntCounter =
-        IntCounter::new( "latency_server_echos", "Incoming Echo Requests").expect("metric can be created");
-
-    pub static ref TX_CLIENT_ECHOS: IntCounter =
-        IntCounter::new( "latency_echo_client_tx", "Transmitted Echo Requests").expect("metric can be created");
-
-    pub static ref RX_CLIENT_ECHOS: IntCounter =
-        IntCounter::new( "latency_echo_client_rx", "Received Echo Requests").expect("metric can be created");
-
-    pub static ref LATENCY_COLLECTOR: Histogram = Histogram::with_opts(
-        HistogramOpts::new("latency", "Echo Response Times in microseconds").buckets(LATENCY_CUSTOM_BUCKETS.to_vec()))
-        .expect("metric can be created"); 
-
-    pub static ref CONNECTED_CLIENTS: IntGauge =
-        IntGauge::new( "connected_clients", "Connected Clients").expect("metric can be created");
-
-    pub static ref REGISTRY: Registry = Registry::new();
+pub struct Metrics {
+    registry: Registry,
+    latency_server_echoes: Box<IntCounter>,
+    latency_echo_client_rx: Box<IntCounter>,
+    latency_echo_client_tx: Box<IntCounter>,
+    latency: Box<Histogram>,
+    connected_clients: Box<IntGauge>,
 }
 
-
-pub fn register_custom_metrics() {
-
-    REGISTRY
-            .register(Box::new(SERVER_ECHOS.clone()))
-            .expect("collector can be registered");
-
-    REGISTRY
-            .register(Box::new(RX_CLIENT_ECHOS.clone()))
-            .expect("collector can be registered");
-
-    REGISTRY
-            .register(Box::new(TX_CLIENT_ECHOS.clone()))
-            .expect("collector can be registered");
-
-    REGISTRY
-        .register(Box::new(LATENCY_COLLECTOR.clone()))
-        .expect("collector can be registered");
-
-    REGISTRY
-            .register(Box::new(CONNECTED_CLIENTS.clone()))
-            .expect("collector can be registered");
-
-
+pub fn new() -> Metrics  {
+    const LATENCY_CUSTOM_BUCKETS: &[f64; 25] = &[
+        5.0, 25.0, 50.0, 75.0,  100.0, 125.0, 150.0, 175.0, 200.0, 250.0, 300.0, 350.0, 400.0,
+        500.0, 600.0, 700.0,800.0, 900.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0,
+    ];
+    let histogram_opts =
+        HistogramOpts::new("latency", "Echo Response Times in microseconds")
+            .buckets(LATENCY_CUSTOM_BUCKETS.to_vec());
+    return Metrics{
+        registry : Registry::new(),
+        latency_server_echoes: Box::new(IntCounter::new( "latency_server_echos", "Incoming Echo Requests").unwrap()),
+        latency_echo_client_rx: Box::new(IntCounter::new( "latency_echo_client_rx", "Received Echo Requests").unwrap()),
+        latency_echo_client_tx: Box::new(IntCounter::new( "latency_echo_client_tx", "Transmitted Echo Requests").unwrap()),
+        latency: Box::new(Histogram::with_opts(histogram_opts).unwrap()),
+        connected_clients: Box::new(IntGauge::new( "connected_clients", "Connected Clients").unwrap()),
+    };
 }
 
+impl Metrics {
+    pub fn dec_client(&self) {
+        self.connected_clients.dec()
+    }
 
-pub fn track_latence(response_time: f64) {
-    LATENCY_COLLECTOR .observe(response_time);
+    pub fn gather(&self) -> Vec<MetricFamily> {
+        return self.registry.gather();
+    }
+
+    pub fn inc_client(&self) {
+        self.connected_clients.inc()
+    }
+
+    pub fn register(&self) {
+        self.registry.register(self.latency_server_echoes.clone()).unwrap();
+        self.registry.register(self.latency_echo_client_rx.clone()).unwrap();
+        self.registry.register(self.latency_echo_client_tx.clone()).unwrap();
+        self.registry.register(self.latency.clone()).unwrap();
+        self.registry.register(self.connected_clients.clone()).unwrap();
+    }
+
+    pub fn track_client_rx(&self) {
+        self.latency_echo_client_rx.inc()
+    }
+
+    pub fn track_client_tx(&self) {
+        self.latency_echo_client_tx.inc()
+    }
+
+    pub fn track_latency(&self, response_time: f64) {
+        self.latency.observe(response_time)
+    }
+
+    pub fn track_server_echoes(&self) {
+        self.latency_server_echoes.inc();
+    }
 }
 
-pub fn track_server_echos(){
-    SERVER_ECHOS.inc();
+unsafe impl Sync for Metrics {}
+
+async fn ws_handler(ws: warp::ws::Ws, id: String, metrics: Arc<Metrics>) -> Result<impl Reply, Rejection> {
+    Ok(ws.on_upgrade(move |socket| client_connection(socket, id, metrics)))
 }
 
-pub fn track_client_tx(){
-    TX_CLIENT_ECHOS.inc();
-}
-
-pub fn track_client_rx(){
-    RX_CLIENT_ECHOS.inc();
-}
-
-
-async fn ws_handler(ws: warp::ws::Ws, id: String) -> Result<impl Reply, Rejection> {
-    Ok(ws.on_upgrade(move |socket| client_connection(socket, id)))
-}
-
-
-async fn client_connection(ws: WebSocket, id: String) {
+async fn client_connection(ws: WebSocket, id: String, metrics: Arc<Metrics>) {
     let (_client_ws_sender, mut client_ws_rcv) = ws.split();
 
-    CONNECTED_CLIENTS.inc();
+    metrics.inc_client();
     println!("{} connected", id);
 
     while let Some(result) = client_ws_rcv.next().await {
@@ -101,17 +97,17 @@ async fn client_connection(ws: WebSocket, id: String) {
     }
 
     println!("{} disconnected", id);
-    CONNECTED_CLIENTS.dec();
+    metrics.dec_client();
 }
 
 
-async fn metrics_handler() -> Result<impl Reply, Rejection> {
+async fn metrics_handler(metrics: Arc<Metrics>) -> Result<impl Reply, Rejection> {
 
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 
     let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
+    if let Err(e) = encoder.encode(&metrics.gather(), &mut buffer) {
         eprintln!("could not encode custom metrics: {}", e);
     };
     let mut res = match String::from_utf8(buffer.clone()) {
@@ -140,16 +136,21 @@ async fn metrics_handler() -> Result<impl Reply, Rejection> {
     Ok(res)
 }
 
-use crate::eargs;
+pub fn with_metrics(metrics: Arc<Metrics>) -> impl Filter<Extract = (Arc<Metrics>,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || metrics.clone())
+}
 
-pub async fn run_metrics(args: &Arc<eargs::Cli>)
+pub async fn run_metrics(args: &Arc<eargs::Cli>, metrics: Arc<Metrics>)
 {
   
     //set up the web interface for prometheus data export and a generic 
-    let metrics_route = warp::path!("metrics").and_then(metrics_handler);
+    let metrics_route = warp::path!("metrics")
+        .and(with_metrics(metrics.clone()))
+        .and_then(metrics_handler);
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(warp::path::param())
+        .and(with_metrics(metrics))
         .and_then(ws_handler);
     
     println!("Started webservice on port {}", args.whttp_port);
@@ -160,6 +161,5 @@ pub async fn run_metrics(args: &Arc<eargs::Cli>)
             warp::serve(metrics_route.or(ws_route))
                 .run(([0, 0, 0, 0], args.whttp_port))
                 .await;
-
     }  
 }

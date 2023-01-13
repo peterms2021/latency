@@ -1,16 +1,32 @@
-
-use std::time::Duration;
-use tokio::{net::UdpSocket};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{mem, u128};
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use std::{u128 };
-use std::net::{ ToSocketAddrs};
-use std::mem;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::net::UdpSocket;
 
 use crate::eargs;
-use crate::emetrics;
+use crate::emetrics::{Metrics};
 
-async fn echo_server(port: u16)-> std::io::Result<()> {
+pub async fn run_latency_test(args: & Arc<eargs::Cli>, metrics: Arc<Metrics>) ->std::io::Result<()>{
+    if args.emode == true {
+        let x = Arc::clone(&args);
+        let svr = tokio::spawn(async move {
+            echo_server(x.port, metrics).await.expect("echo_server task failed");
+        });
+        svr.await.expect("echo_server task failed");
+    } else {
+        //check for valid address
+        let x = Arc::clone(&args);
+        let cli = tokio::spawn(async move {
+            echo_client( x.server_addr.clone(), x.port, x.interval, metrics.clone()).await.expect("Client tasks failed to start");
+        });
+        cli.await.expect("Client tasks failed to start");
+    }
+
+    Ok(())
+}
+
+async fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string()).await?;
     println!("\nstart server on port {} \n", port);
@@ -24,11 +40,11 @@ async fn echo_server(port: u16)-> std::io::Result<()> {
 
         socket.send_to(&buf[..amt], src).await?;
 
-        emetrics::track_server_echos();
+        metrics.track_server_echoes();
     }
 }
 
-async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
+async fn echo_client_recv( rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
     println!(" echo_client_recv");
 
     let mut buf = vec![0u8; 1000];
@@ -53,7 +69,7 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
             .unwrap()
             .as_nanos();
     
-        emetrics::track_client_rx();
+        metrics.track_client_rx();
 
         if recv_time >= send_time {
 
@@ -66,14 +82,14 @@ async fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
             #[cfg(test)]
             println!("{:?} detlta(us)", dtime);
 
-            emetrics::track_latence(dtime);
+            metrics.track_latency(dtime);
         }
     }
 
 // Ok(())
 }
 
-async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<()> {
+async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32, metrics: Arc<Metrics>)->std::io::Result<()> {
     let mut send_interval = tokio::time::interval(Duration::from_millis(interval as u64));
     loop {
         send_interval.tick().await;
@@ -85,7 +101,7 @@ async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<
 
         let bytes = time.to_be_bytes();
         let len = tx.send(&bytes).await?;
-        emetrics::track_client_tx();
+        metrics.track_client_tx();
 
         #[cfg(test)]{
             assert_eq!(len, mem::size_of::<u128>());
@@ -94,7 +110,7 @@ async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<
     }
 }
 
-async fn echo_client(addr: String, port: u16, interval: u32)->std::io::Result<()>{
+async fn echo_client(addr: String, port: u16, interval: u32, metrics: Arc<Metrics>)->std::io::Result<()>{
 
     let ad = addr + ":" + &port.to_string();
     let _remote_addr_iter= ad.to_socket_addrs().expect("Unable to resolve domain");
@@ -112,34 +128,16 @@ async fn echo_client(addr: String, port: u16, interval: u32)->std::io::Result<()
     let tx = rx.clone();    
 
     //spawn thread that will wait for the echos
-    tokio::spawn(async  move  {
-        echo_client_sender(tx,interval).await.expect("echo client sender failed");
+    let send_metrics = metrics.clone();
+    tokio::spawn(async move {
+        echo_client_sender(tx,interval, send_metrics).await.expect("echo client sender failed");
     });
 
+    let recv_metrics = metrics.clone();
     tokio::spawn( async move {
-        echo_client_recv(rx).await.expect("client recv tasks failed");
+        echo_client_recv(rx, recv_metrics).await.expect("client recv tasks failed");
     });
 
     //spawn the sender
-    Ok(())
-}
-
-pub async fn run_latency_test(args: & Arc<eargs::Cli>) ->std::io::Result<()>{
-
-    if args.emode == true {
-        let x = Arc::clone(&args);
-        let svr = tokio::spawn(async move {
-            echo_server(x.port).await.expect("echo_server task failed");
-        });
-        svr.await.expect("echo_server task failed");
-    }else{
-        //check for valid address
-        let x = Arc::clone(&args);
-        let cli = tokio::spawn(async move {
-            echo_client( x.server_addr.clone(), x.port, x.interval).await.expect("Client tasks failed to start");
-        });
-        cli.await.expect("Client tasks failed to start");
-    }
-
     Ok(())
 }

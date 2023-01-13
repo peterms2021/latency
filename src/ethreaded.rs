@@ -1,15 +1,30 @@
 // use thread bound vs tasks for measuring app latency
 
-
 use rand::{thread_rng, Rng};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{mem, thread, time, u128};
+use std::net::{UdpSocket, ToSocketAddrs};
 use std::sync::Arc;
-use std::{u128 };
-use std::net::{ UdpSocket, ToSocketAddrs};
-use std::mem;
-use std::{thread, time};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::eargs;
+use crate::emetrics::Metrics;
+
+pub fn run_latency_test(args: & Arc<eargs::Cli>, metrics: Arc<Metrics>) ->std::io::Result<()>{
+    if args.emode == true {
+        let x = Arc::clone(&args);
+        let svr = thread::spawn(  move || {
+            echo_server(x.port, metrics);
+        });
+    }else{
+        //check for valid address
+        let x = Arc::clone(&args);
+        let cli = thread::spawn(move  || {
+            echo_client( x.server_addr.clone(), x.port, x.interval, metrics);
+        });
+    }
+
+    Ok(())
+}
 
 fn induce_delay() {
     let mut rng = thread_rng();
@@ -20,7 +35,7 @@ fn induce_delay() {
     thread::sleep(sleep_ms);
 }
 
-pub fn echo_server(port: u16)-> std::io::Result<()> {
+pub fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string())?;
     println!("\nstart server on port {} \n", port);
@@ -34,11 +49,11 @@ pub fn echo_server(port: u16)-> std::io::Result<()> {
 
         socket.send_to(&buf[..amt], src)?;
         
-        main::track_server_echos();
+        metrics.track_server_echoes();
     }
 }
 
-fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
+fn echo_client_recv(rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
     println!(" echo_client_recv");
 
     let mut buf = vec![0u8; 1000];
@@ -66,7 +81,7 @@ fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
             .unwrap()
             .as_nanos();
     
-        emetrics::track_client_rx();
+        metrics.track_client_rx();
 
         if recv_time >= send_time {
 
@@ -79,14 +94,14 @@ fn echo_client_recv( rx: Arc<UdpSocket>) ->std::io::Result<()> {
             #[cfg(test)]
             println!("{:?} detlta(us)", dtime);
 
-            emetrics::track_latence(dtime);
+            metrics.track_latency(dtime);
         }
     }
 
 // Ok(())
 }
 
-fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<()> {
+fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32, metrics: Arc<Metrics>)->std::io::Result<()> {
     let sleep_ms = time::Duration::from_millis(interval as u64);
     loop {
 
@@ -99,7 +114,7 @@ fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<()> {
 
         let bytes = time.to_be_bytes();
         let len = tx.send(&bytes)?;
-        emetrics::track_client_tx();
+        metrics.track_client_tx();
 
         #[cfg(test)]{
             assert_eq!(len, mem::size_of::<u128>());
@@ -108,7 +123,7 @@ fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32)->std::io::Result<()> {
     }
 }
 
-fn echo_client(addr: String, port: u16, interval: u32)->std::io::Result<()>{
+fn echo_client(addr: String, port: u16, interval: u32, metrics: Arc<Metrics>)->std::io::Result<()>{
 
     let ad = addr + ":" + &port.to_string();
     let _remote_addr_iter= ad.to_socket_addrs().expect("Unable to resolve domain");
@@ -126,32 +141,16 @@ fn echo_client(addr: String, port: u16, interval: u32)->std::io::Result<()>{
     let tx = rx.clone();    
 
     //spawn thread that will wait for the echos
+    let send_metrics = metrics.clone();
     thread::spawn(move ||  {
-        echo_client_sender(tx,interval).expect("echo client sender failed");
+        echo_client_sender(tx,interval, send_metrics).expect("echo client sender failed");
     });
 
+    let rcv_metrics = metrics.clone();
     thread::spawn( move || {
-        echo_client_recv(rx).expect("client recv tasks failed");
+        echo_client_recv(rx, rcv_metrics).expect("client recv tasks failed");
     });
 
     //spawn the sender
-    Ok(())
-}
-
-pub fn run_latency_test(args: & Arc<eargs::Cli>) ->std::io::Result<()>{
-
-    if args.emode == true {
-        let x = Arc::clone(&args);
-        let svr = thread::spawn(  move || {
-            echo_server(x.port);
-        });
-    }else{
-        //check for valid address
-        let x = Arc::clone(&args);
-        let cli = thread::spawn(move  || {
-            echo_client( x.server_addr.clone(), x.port, x.interval);
-        });
-    }
-
     Ok(())
 }
