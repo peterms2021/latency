@@ -1,0 +1,27 @@
+{
+    "name": "Node Typescript Codespace",
+    "hostRequirements": {
+        "cpus": 4,
+        "memory": "8gb",
+        "storage": "32gb" 
+     },
+    "extensions": [
+		"coenraads.bracket-pair-colorizer-2",
+		"github.vscode-pull-request-github",
+        "ms-azuretools.vscode-docker",
+        "rust-lang.rust-analyzer"
+	],
+    "dockerFile": "Dockerfile",
+    "settings": {
+        "terminal.integrated.shell.linux": "/usr/bin/zsh",
+        "files.exclude": {
+            "**/CODE_OF_CONDUCT.md": true,
+            "**/LICENSE": true
+        }
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:1": {
+            "version": "latest"
+        }
+    }
+}
