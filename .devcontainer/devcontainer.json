@@ -1,5 +1,5 @@
 {
-    "name": "Node Typescript Codespace",
+    "name": "Rust Codespace",
     "hostRequirements": {
         "cpus": 4,
         "memory": "8gb",
