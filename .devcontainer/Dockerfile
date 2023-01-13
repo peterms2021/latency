@@ -1,4 +1,4 @@
-FROM node:1.66
+FROM rust:1.66
 
 WORKDIR /home/
 
