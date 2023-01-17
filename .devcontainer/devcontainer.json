@@ -1,0 +1,28 @@
+{
+    "name": "Rust Codespace",
+    "hostRequirements": {
+        "cpus": 4,
+        "memory": "8gb",
+        "storage": "32gb" 
+     },
+    "extensions": [
+		"github.codespaces",
+        "rust-lang.rust-analyzer",
+        "coenraads.bracket-pair-colorizer-2",
+        "ms-azuretools.vscode-docker",
+		"github.vscode-pull-request-github"
+	],
+    "dockerFile": "Dockerfile",
+    "settings": {
+        "terminal.integrated.shell.linux": "/usr/bin/zsh",
+        "files.exclude": {
+            "**/CODE_OF_CONDUCT.md": true,
+            "**/LICENSE": true
+        }
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:1": {
+            "version": "latest"
+        }
+    }
+}
