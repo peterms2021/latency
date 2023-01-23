@@ -1,5 +1,6 @@
 // use thread bound vs tasks for measuring app latency
 
+
 #[cfg(dtest)]
 use rand::{thread_rng, Rng};
 
@@ -7,6 +8,7 @@ use rand::{thread_rng, Rng};
 use std::{mem };
 
 use std::{thread, time, u128};
+
 use std::net::{UdpSocket, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -31,6 +33,7 @@ pub fn run_latency_test(args: & Arc<eargs::Cli>, metrics: Arc<Metrics>) ->std::i
     Ok(())
 }
 
+
 #[cfg(dtest)]
 fn induce_delay() {
     let mut rng = thread_rng();
@@ -45,7 +48,6 @@ pub fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string())?;
     println!("\nStarted server thread on port {} \n", port);
-
     loop {
         let mut buf = vec![0u8; 1000];
         let (amt, src) = socket.recv_from(&mut buf)?;
@@ -60,14 +62,14 @@ pub fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
 }
 
 fn echo_client_recv(rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
-    println!(" echo_client_recv thread");
 
+    println!(" echo_client_recv thread");
     let mut buf = vec![0u8; 1000];
     loop {
 
         //let n = rx.recv(&mut buf).await?;
         let (n, _addr) = rx.recv_from(&mut buf)?;
-
+        
 #[cfg(test)]
         {
             println!("{:?} recv from {:?}", n,_addr);
@@ -121,7 +123,6 @@ fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32, metrics: Arc<Metrics>)-
         let bytes = time.to_be_bytes();
         let _len = tx.send(&bytes)?;
         metrics.track_client_tx();
-
         #[cfg(test)]{
             assert_eq!(_len, mem::size_of::<u128>());
             println!("{:?} bytes sent", _len);

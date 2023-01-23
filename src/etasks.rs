@@ -1,3 +1,4 @@
+
 use std::{u128};
 
 #[cfg(test)]
@@ -34,7 +35,6 @@ async fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string()).await?;
     println!("\nStarted server task on port {} \n", port);
-
     loop {
         let mut buf = vec![0u8; 1000];
         let (amt, src) = socket.recv_from(&mut buf).await?;
@@ -49,14 +49,13 @@ async fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
 }
 
 async fn echo_client_recv( rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
-    println!(" echo_client_recv task");
 
+    println!(" echo_client_recv task");
     let mut buf = vec![0u8; 1000];
     loop {
 
         //let n = rx.recv(&mut buf).await?;
         let (n, _addr) = rx.recv_from(&mut buf).await?;
-
 #[cfg(test)]
         {
             println!("{:?} recv from {:?}", n,_addr);
