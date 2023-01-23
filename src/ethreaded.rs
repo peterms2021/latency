@@ -1,7 +1,14 @@
 // use thread bound vs tasks for measuring app latency
 
+
+#[cfg(dtest)]
 use rand::{thread_rng, Rng};
-use std::{mem, thread, time, u128};
+
+#[cfg(test)]
+use std::{mem };
+
+use std::{thread, time, u128};
+
 use std::net::{UdpSocket, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,20 +19,22 @@ use crate::emetrics::Metrics;
 pub fn run_latency_test(args: & Arc<eargs::Cli>, metrics: Arc<Metrics>) ->std::io::Result<()>{
     if args.emode == true {
         let x = Arc::clone(&args);
-        let svr = thread::spawn(  move || {
-            echo_server(x.port, metrics);
+        let _svr = thread::spawn(  move || {
+            echo_server(x.port, metrics).unwrap();
         });
     }else{
         //check for valid address
         let x = Arc::clone(&args);
-        let cli = thread::spawn(move  || {
-            echo_client( x.server_addr.clone(), x.port, x.interval, metrics);
+        let _cli = thread::spawn(move  || {
+            echo_client( x.server_addr.clone(), x.port, x.interval, metrics).unwrap();
         });
     }
 
     Ok(())
 }
 
+
+#[cfg(dtest)]
 fn induce_delay() {
     let mut rng = thread_rng();
     let delay_time: u32 = rng.gen_range(1..20);
@@ -38,8 +47,7 @@ fn induce_delay() {
 pub fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string())?;
-    println!("\nstart server on port {} \n", port);
-
+    println!("\nStarted server thread on port {} \n", port);
     loop {
         let mut buf = vec![0u8; 1000];
         let (amt, src) = socket.recv_from(&mut buf)?;
@@ -54,17 +62,17 @@ pub fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
 }
 
 fn echo_client_recv(rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
-    println!(" echo_client_recv");
 
+    println!(" echo_client_recv thread");
     let mut buf = vec![0u8; 1000];
     loop {
 
         //let n = rx.recv(&mut buf).await?;
-        let (n, addr) = rx.recv_from(&mut buf)?;
-
+        let (n, _addr) = rx.recv_from(&mut buf)?;
+        
 #[cfg(test)]
         {
-            println!("{:?} recv from {:?}", n,addr);
+            println!("{:?} recv from {:?}", n,_addr);
             assert_eq!(n, mem::size_of::<u128>());
         }
 
@@ -85,7 +93,7 @@ fn echo_client_recv(rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result
 
         if recv_time >= send_time {
 
-            let mut delta = recv_time - send_time;
+            let delta = recv_time - send_time;
             let mut dtime: f64 = delta as f64;
 
             //convert to usec
@@ -113,12 +121,11 @@ fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32, metrics: Arc<Metrics>)-
             .as_nanos();
 
         let bytes = time.to_be_bytes();
-        let len = tx.send(&bytes)?;
+        let _len = tx.send(&bytes)?;
         metrics.track_client_tx();
-
         #[cfg(test)]{
-            assert_eq!(len, mem::size_of::<u128>());
-            println!("{:?} bytes sent", len);
+            assert_eq!(_len, mem::size_of::<u128>());
+            println!("{:?} bytes sent", _len);
         }
     }
 }

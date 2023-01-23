@@ -154,12 +154,8 @@ pub async fn run_metrics(args: &Arc<eargs::Cli>, metrics: Arc<Metrics>)
         .and_then(ws_handler);
     
     println!("Started webservice on port {}", args.whttp_port);
+    warp::serve(metrics_route.or(ws_route))
+        .run(([0, 0, 0, 0], args.whttp_port))
+        .await;
 
-    //only start the metrics service for client mode
-   if args.emode == false 
-    {
-            warp::serve(metrics_route.or(ws_route))
-                .run(([0, 0, 0, 0], args.whttp_port))
-                .await;
-    }  
 }

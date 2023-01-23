@@ -1,4 +1,9 @@
-use std::{mem, u128};
+
+use std::{u128};
+
+#[cfg(test)]
+use std::{mem};
+
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -29,8 +34,7 @@ pub async fn run_latency_test(args: & Arc<eargs::Cli>, metrics: Arc<Metrics>) ->
 async fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
     
     let socket = UdpSocket::bind("0.0.0.0:".to_string() + &port.to_string()).await?;
-    println!("\nstart server on port {} \n", port);
-
+    println!("\nStarted server task on port {} \n", port);
     loop {
         let mut buf = vec![0u8; 1000];
         let (amt, src) = socket.recv_from(&mut buf).await?;
@@ -45,17 +49,16 @@ async fn echo_server(port: u16, metrics: Arc<Metrics>)-> std::io::Result<()> {
 }
 
 async fn echo_client_recv( rx: Arc<UdpSocket>, metrics: Arc<Metrics>) ->std::io::Result<()> {
-    println!(" echo_client_recv");
 
+    println!(" echo_client_recv task");
     let mut buf = vec![0u8; 1000];
     loop {
 
         //let n = rx.recv(&mut buf).await?;
-        let (n, addr) = rx.recv_from(&mut buf).await?;
-
+        let (n, _addr) = rx.recv_from(&mut buf).await?;
 #[cfg(test)]
         {
-            println!("{:?} recv from {:?}", n,addr);
+            println!("{:?} recv from {:?}", n,_addr);
             assert_eq!(n, mem::size_of::<u128>());
         }
 
@@ -100,12 +103,12 @@ async fn echo_client_sender(tx: Arc<UdpSocket>, interval: u32, metrics: Arc<Metr
         .as_nanos();
 
         let bytes = time.to_be_bytes();
-        let len = tx.send(&bytes).await?;
+        let _len = tx.send(&bytes).await?;
         metrics.track_client_tx();
 
         #[cfg(test)]{
-            assert_eq!(len, mem::size_of::<u128>());
-            println!("{:?} bytes sent", len);
+            assert_eq!(_len, mem::size_of::<u128>());
+            println!("{:?} bytes sent", _len);
         }
     }
 }

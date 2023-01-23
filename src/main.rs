@@ -14,9 +14,9 @@ async fn main() {
     metrics.register();
 
     if args.async_mode {
-        etasks::run_latency_test(args, metrics.clone()).await;   
+        etasks::run_latency_test(args, metrics.clone()).await.unwrap();   
     } else {
-        ethreaded::run_latency_test(args, metrics.clone());   
+        ethreaded::run_latency_test(args, metrics.clone()).unwrap();   
     }
 
     emetrics::run_metrics(args, metrics).await;
